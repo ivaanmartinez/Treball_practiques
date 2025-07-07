@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Silos y Lotes | Sistema de Gestión Industrial</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Suppress Tailwind CSS production warning
+        tailwind.config = {
+            corePlugins: {
+                preflight: false,
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase SDK v9 compat -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        .barcode {
+            margin: 5px auto;
+            height: 50px;
+            background: white; 
+            padding: 5px;
+            border-radius: 4px;
+            max-width: 100%;
+            overflow: hidden;
+        }
+        
+        /* Mejoras para el modal del código de barras */
+        .barcode-container {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 16px 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 120px;
+        }
+        
+        .barcode-svg {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .barcode-text {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            color: #495057;
+            margin-top: 12px;
+            letter-spacing: 1px;
+            word-break: break-all;
+            text-align: center;
+        }
+        
+        /* Modal responsive mejorado */
+        .modal-content {
+            max-width: 90vw;
+            max-height: 90vh;
+            width: 100%;
+            margin: 20px;
+        }
+        
+        @media (min-width: 640px) {
+            .modal-content {
+                max-width: 500px;
+                margin: 40px;
+            }
+        }
+        
+        .card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #e5e7eb;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        /* Estilos mejorados para botones */
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border: none;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+            transition: all 0.3s ease;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            transform: translateY(-1px);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border: none;
+            box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+            transition: all 0.3s ease;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+        }
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+            transform: translateY(-1px);
+        }
+        .btn-danger:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+            border: none;
+            box-shadow: 0 2px 4px rgba(107, 114, 128, 0.2);
+            transition: all 0.3s ease;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+        }
+        .btn-secondary:hover {
+            background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+            box-shadow: 0 4px 12px rgba(75, 85, 99, 0.4);
+            transform: translateY(-1px);
+        }
+        .btn-secondary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(75, 85, 99, 0.3);
+        }
+
+        /* Botones de acción en tabla */
+        .action-btn {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .action-btn-view {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+        }
+        .action-btn-view:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .action-btn-delete {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
+        }
+        .action-btn-delete:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .action-btn-print {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+        }
+        .action-btn-print:hover {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            box-shadow: 0 2px 6px rgba(5, 150, 105, 0.4);
+            transform: translateY(-1px);
+        }
+
+        /* Botones de exportar */
+        .export-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: 1px solid #e5e7eb;
+            background: white;
+            color: #374151;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .export-btn:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            color: #1f2937;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .status-active {
+            background-color: #10b981;
+        }
+        .status-expired {
+            background-color: #ef4444;
+        }
+        .status-warning {
+            background-color: #f59e0b;
+        }
+        .search-container {
+            position: relative;
+            width: 100%;
+            max-width: 220px;
+            min-width: 180px;
+        }
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6b7280;
+            z-index: 10;
+            font-size: 1rem;
+        }
+        .search-input {
+            padding-left: 2.5rem;
+            padding-right: 2.5rem;
+            transition: all 0.3s ease;
+        }
+        .search-input:focus {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        
+        /* Formulario compacto */
+        .form-compact {
+            gap: 1rem;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            .form-row-2 {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        /* Mejoras responsive para la búsqueda */
+        @media (max-width: 640px) {
+            .search-container {
+                max-width: 100%;
+                min-width: 100%;
+            }
+        }
+        
+        @media (min-width: 640px) {
+            .search-container {
+                max-width: 220px;
+                min-width: 180px;
+            }
+        }
+        .custom-alert {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .fade-out {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .print-area, .print-area * {
+                visibility: visible;
+            }
+            .print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-active {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .badge-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        .badge-expired {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+        }
+        .select-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            pointer-events: none;
+        }
+        /* Ajuste para ampliar el campo de Número de Lote */
+        #lote {
+            width: 82%; /* Asegura que ocupe todo el ancho disponible */
+            max-width: 400px; /* Define un ancho máximo para que no se desborde */
+            padding: 0.625rem 2.5rem; /* Ajusta el padding para que sea proporcional */
+        }
+        /* Ajuste para alinear los botones de búsqueda y Limpiar todo */
+        .search-actions {
+            display: flex;
+            gap: 6rem; /* Espacio entre los botones */
+            flex-wrap: wrap; /* Permite que se ajusten en pantallas pequeñas */
+            align-items: center;
+        }
+        @media (max-width: 640px) {
+            .search-actions {
+                flex-direction: column;
+                width: 100%;
+                gap: 0.75rem;
+            }
+            .search-container {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body class="font-sans bg-gray-50 text-gray-800">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-blue-800 to-blue-900 text-white shadow-lg">
+            <div class="container mx-auto px-4 py-6">
+                <div class="flex flex-col md:flex-row md:justify-between md:items-center">
+                    <div class="flex items-center mb-4 md:mb-0">
+                        <div class="bg-white bg-opacity-20 p-3 rounded-xl mr-4">
+                            <i class="fas fa-warehouse text-white text-2xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold">Gestión de Silos y Lotes</h1>
+                            <p class="text-blue-100 mt-1 text-sm">Sistema de trazabilidad industrial</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="inline-flex items-center bg-white bg-opacity-10 px-3 py-1 rounded-full">
+                            <span class="text-blue-100 text-sm mr-2">Versión 2.1.2</span>
+                            <span class="h-2 w-2 bg-green-400 rounded-full animate-pulse"></span>
+                        </div>
+                        <p class="text-xs text-blue-200 mt-1">Última actualización: <span id="current-time" class="font-medium"></span></p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="container mx-auto px-4 py-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Form Section -->
+                <div class="lg:col-span-1">
+                    <div class="card bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center mb-6">
+                            <div class="bg-blue-100 p-3 rounded-xl mr-4">
+                                <i class="fas fa-plus-circle text-blue-600 text-xl"></i>
+                            </div>
+                            <h2 class="text-xl font-semibold text-gray-800">Nuevo Registro</h2>
+                        </div>
+                        
+                        <form id="siloForm" class="space-y-4">
+                            <!-- Primera fila: Número de Lote más pequeño -->
+                            <div>
+                                <label for="lote" class="block text-sm font-medium text-gray-700 mb-2">Número de Lote</label>
+                                <div class="relative">
+                                    <i class="fas fa-barcode input-icon"></i>
+                                    <input type="text" id="lote" class="w-full pl-10 p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" placeholder="Ej: LOTE2023-001" required>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Ingrese un identificador único para el lote</p>
+                            </div>
+                            
+                            <!-- Segunda fila: Silo y Máquina en la misma línea -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="silo" class="block text-sm font-medium text-gray-700 mb-2">Silo</label>
+                                    <div class="relative">
+                                        <i class="fas fa-archive input-icon"></i>
+                                        <select id="silo" class="w-full pl-10 p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none transition-all duration-200" required>
+                                            <option value="">Seleccione un silo</option>
+                                            <option value="Silo 1">Silo 1</option>
+                                            <option value="Silo 2">Silo 2</option>
+                                            <option value="Silo 3">Silo 3</option>
+                                            <option value="Silo 4">Silo 4</option>
+                                            <option value="Silo 5">Silo 5</option>
+                                        </select>
+                                        <i class="fas fa-chevron-down select-icon"></i>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label for="maquina" class="block text-sm font-medium text-gray-700 mb-2">Máquina</label>
+                                    <div class="relative">
+                                        <i class="fas fa-cogs input-icon"></i>
+                                        <select id="maquina" class="w-full pl-10 p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none transition-all duration-200" required>
+                                            <option value="">Seleccione una máquina</option>
+                                            <option value="Máquina 1">Máquina 1</option>
+                                            <option value="Máquina 2">Máquina 2</option>
+                                            <option value="Máquina 3">Máquina 3</option>
+                                            <option value="Máquina 4">Máquina 4</option>
+                                            <option value="Máquina 5">Máquina 5</option>
+                                            <option value="Máquina 6">Máquina 6</option>
+                                            <option value="Máquina 7">Máquina 7</option>
+                                            <option value="Máquina 8">Máquina 8</option>
+                                        </select>
+                                        <i class="fas fa-chevron-down select-icon"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn-primary text-white w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center">
+                                <i class="fas fa-save mr-2"></i> Registrar Lote
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- Stats Card -->
+                    <div class="card bg-white rounded-xl shadow-sm p-6 mt-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-chart-pie mr-2 text-blue-600"></i> Métricas Clave
+                        </h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <div class="text-blue-600 text-sm font-medium mb-1">Registros Activos</div>
+                                <div class="text-2xl font-bold text-gray-800" id="active-count">0</div>
+                            </div>
+                            <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                                <div class="text-green-600 text-sm font-medium mb-1">Silos en Uso</div>
+                                <div class="text-2xl font-bold text-gray-800" id="silos-in-use">0/5</div>
+                            </div>
+                            <div class="bg-purple-50 p-4 rounded-lg border border-purple-100 col-span-2">
+                                <div class="text-purple-600 text-sm font-medium mb-1">Último Registro</div>
+                                <div class="text-md font-medium text-gray-800 truncate" id="last-record">N/A</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Table Section -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-6">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                                    <i class="fas fa-table mr-2 text-blue-600"></i> Registros Actuales
+                                </h2>
+                                <div class="mt-4 md:mt-0 search-actions">
+                                    <div class="search-container flex-shrink-0">
+                                        <i class="fas fa-search search-icon"></i>
+                                        <input type="text" id="searchInput" class="search-input w-full p-2.5 pl-10 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" placeholder="Buscar por lote, silo o máquina...">
+                                        <button id="clearSearch" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <button id="clearStorage" class="btn-danger text-white py-2.5 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center whitespace-nowrap flex-shrink-0">
+                                        <i class="fas fa-trash-alt mr-2"></i> Limpiar todo
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                                <table class="w-full text-left">
+                                    <thead class="bg-gray-50">
+                                        <tr class="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <th class="px-6 py-3">Estado</th>
+                                            <th class="px-6 py-3">Lote</th>
+                                            <th class="px-6 py-3">Silo</th>
+                                            <th class="px-6 py-3">Máquina</th>
+                                            <th class="px-6 py-3">Fecha/Hora</th>
+                                            <th class="px-6 py-3">Código</th>
+                                            <th class="px-6 py-3 text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="registrosTable" class="divide-y divide-gray-200 bg-white">
+                                        <!-- Registros se añadirán aquí dinámicamente -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="mt-4 flex justify-between items-center text-sm text-gray-600">
+                                <div id="table-info">Mostrando 0 registros</div>
+                                <div class="flex space-x-4">
+                                    <button id="export-csv" class="export-btn">
+                                        <i class="fas fa-file-csv"></i> Exportar CSV
+                                    </button>
+                                    <button id="print-report" class="export-btn">
+                                        <i class="fas fa-print"></i> Imprimir
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal del Código de Barras Mejorado -->
+    <div id="barcodeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden p-4">
+        <div class="modal-content bg-white rounded-xl shadow-xl overflow-hidden">
+            <!-- Header del Modal -->
+            <div class="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
+                <div class="flex items-center">
+                    <div class="bg-blue-500 p-2 rounded-lg mr-3">
+                        <i class="fas fa-barcode text-white text-lg"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-800">Código de Barras</h3>
+                </div>
+                <button id="closeModal" class="text-gray-500 hover:text-gray-700 hover:bg-gray-200 p-2 rounded-lg transition-all duration-200">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            
+            <!-- Contenido del Modal -->
+            <div class="p-6">
+                <!-- Contenedor del Código de Barras -->
+                <div class="barcode-container">
+                    <div class="flex items-center justify-center mb-3">
+                        <i class="fas fa-qrcode text-gray-400 text-2xl"></i>
+                    </div>
+                    <svg id="modalBarcode" class="barcode-svg"></svg>
+                    <div id="barcodeText" class="barcode-text"></div>
+                </div>
+                
+                <!-- Información adicional -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div class="flex items-center">
+                            <i class="fas fa-calendar-alt text-gray-500 mr-2"></i>
+                            <span class="text-gray-600">Generado:</span>
+                            <span class="ml-1 font-medium" id="generationTime"></span>
+                        </div>
+                        <div class="flex items-center">
+                            <i class="fas fa-cog text-gray-500 mr-2"></i>
+                            <span class="text-gray-600">Formato:</span>
+                            <span class="ml-1 font-medium">CODE128</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Botones de Acción -->
+                <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                    <button id="printBarcode" class="btn-primary text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 inline-flex items-center justify-center">
+                        <i class="fas fa-print mr-2"></i> Imprimir Código
+                    </button>
+                    <button id="downloadBarcode" class="btn-secondary text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 inline-flex items-center justify-center">
+                        <i class="fas fa-download mr-2"></i> Descargar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyAc5V1vI3wZaNgzzf7rYv1MVEn7HYAuB58",
+          authDomain: "gestion-de-silos.firebaseapp.com",
+          databaseURL: "https://gestion-de-silos-default-rtdb.firebaseio.com",
+          projectId: "gestion-de-silos",
+          storageBucket: "gestion-de-silos.firebasestorage.app",
+          messagingSenderId: "334228928393",
+          appId: "1:334228928393:web:0206599afccafa40351358",
+          measurementId: "G-QKN3J6LSW1"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Constantes
+        const LIMITE_TIEMPO = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
+        const WARNING_TIME = 12 * 60 * 60 * 1000; // 12 horas para mostrar advertencia
+        
+        // Elementos del DOM
+        let siloForm, registrosTable, clearStorageBtn, searchInput, barcodeModal, modalBarcode, closeModal, printBarcode, exportCsvBtn, printReportBtn, activeCountEl, silosInUseEl, lastRecordEl, currentTimeEl, clearSearchBtn, downloadBarcode;
+        
+        // Variable global para registros
+        let registros = [];
+        
+        // Inicializar la aplicación
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Aplicación iniciada');
+            
+            // Inicializar elementos del DOM
+            initializeElements();
+            
+            // Cargar datos y configurar
+            cargarRegistros();
+            setupRealtimeSync();
+            limpiarRegistrosExpirados();
+            actualizarTabla();
+            actualizarEstadisticas();
+            setupEventListeners();
+            
+            // Actualizar tiempo cada segundo
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+        });
+        
+        function initializeElements() {
+            siloForm = document.getElementById('siloForm');
+            registrosTable = document.getElementById('registrosTable');
+            clearStorageBtn = document.getElementById('clearStorage');
+            searchInput = document.getElementById('searchInput');
+            barcodeModal = document.getElementById('barcodeModal');
+            modalBarcode = document.getElementById('modalBarcode');
+            closeModal = document.getElementById('closeModal');
+            printBarcode = document.getElementById('printBarcode');
+            downloadBarcode = document.getElementById('downloadBarcode');
+            exportCsvBtn = document.getElementById('export-csv');
+            printReportBtn = document.getElementById('print-report');
+            activeCountEl = document.getElementById('active-count');
+            silosInUseEl = document.getElementById('silos-in-use');
+            lastRecordEl = document.getElementById('last-record');
+            currentTimeEl = document.getElementById('current-time');
+            clearSearchBtn = document.getElementById('clearSearch');
+            
+            console.log('Elementos DOM inicializados');
+        }
+        
+        function cargarRegistros() {
+            try {
+                const registrosRef = database.ref('siloRegistros');
+                registrosRef.once('value', (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        // Convertir objeto de Firebase a array
+                        registros = Object.values(data).filter(item => item && item.lote && item.silo && item.maquina && item.fecha && item.timestamp);
+                        console.log('Registros cargados desde Firebase:', registros);
+                    } else {
+                        console.log('No hay registros en Firebase');
+                        registros = [];
+                    }
+                    actualizarTabla();
+                    actualizarEstadisticas();
+                }, (error) => {
+                    console.error('Error al cargar registros:', error);
+                    mostrarAlerta('Error al leer los registros de la base de datos.', 'error');
+                    registros = [];
+                    actualizarTabla();
+                    actualizarEstadisticas();
+                });
+            } catch (error) {
+                console.error('Error general al cargar registros:', error);
+                mostrarAlerta('Error al leer los registros.', 'error');
+                registros = [];
+                actualizarTabla();
+                actualizarEstadisticas();
+            }
+        }
+        
+        function guardarRegistros() {
+            try {
+                const registrosRef = database.ref('siloRegistros');
+                // Convertir el array a un objeto para Firebase
+                const registrosObj = {};
+                registros.forEach((registro, index) => {
+                    registrosObj[index] = registro;
+                });
+                registrosRef.set(registrosObj, (error) => {
+                    if (error) {
+                        console.error('Error al guardar registros:', error);
+                        mostrarAlerta('Error al guardar los datos.', 'error');
+                    } else {
+                        console.log('Registros guardados en Firebase:', registros.length);
+                    }
+                });
+            } catch (error) {
+                console.error('Error general al guardar registros:', error);
+                mostrarAlerta('Error al guardar los datos.', 'error');
+            }
+        }
+        
+        function setupRealtimeSync() {
+            const registrosRef = database.ref('siloRegistros');
+            registrosRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    registros = Object.values(data).filter(item => item && item.lote && item.silo && item.maquina && item.fecha && item.timestamp);
+                } else {
+                    registros = [];
+                }
+                actualizarTabla();
+                actualizarEstadisticas();
+            }, (error) => {
+                console.error('Error en sincronización en tiempo real:', error);
+                mostrarAlerta('Error al sincronizar los datos.', 'error');
+            });
+        }
+        
+        function setupEventListeners() {
+            if (!siloForm || !clearStorageBtn || !searchInput) {
+                console.error('Elementos DOM no encontrados');
+                return;
+            }
+            
+            // Formulario de registro
+            siloForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                console.log('Formulario enviado');
+                
+                const lote = document.getElementById('lote').value.trim();
+                const silo = document.getElementById('silo').value;
+                const maquina = document.getElementById('maquina').value;
+                
+                console.log('Datos del formulario:', { lote, silo, maquina });
+                
+                // Validar que todos los campos estén llenos
+                if (!lote || !silo || !maquina) {
+                    mostrarAlerta('Por favor complete todos los campos', 'warning');
+                    return;
+                }
+                
+                // Validación básica: solo verificar que el lote no esté vacío y tenga al menos 2 caracteres
+                if (lote.length < 2) {
+                    mostrarAlerta('El número de lote debe tener al menos 2 caracteres', 'error');
+                    return;
+                }
+                
+                // Verificar si el lote ya existe en el mismo silo
+                const existe = registros.some(r => r.lote === lote && r.silo === silo);
+                if (existe) {
+                    mostrarAlerta('Este lote ya está registrado en el silo seleccionado.', 'warning');
+                    return;
+                }
+                
+                const fecha = new Date().toLocaleString('es-ES', { 
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                   second: '2-digit'
+                }); 
+                const timestamp = new Date().getTime();
+                
+                const registro = { lote, silo, maquina, fecha, timestamp };
+                registros.push(registro);
+                
+                console.log('Nuevo registro añadido:', registro);
+                console.log('Total registros:', registros.length);
+                
+                guardarRegistros();
+                actualizarTabla();
+                actualizarEstadisticas();
+                siloForm.reset();
+                
+                mostrarAlerta('Registro añadido correctamente.', 'success');
+            });
+            
+            // Buscar registros
+            searchInput.addEventListener('input', function() {
+                if (searchInput.value.length > 0) {
+                    clearSearchBtn.classList.remove('hidden');
+                } else {
+                    clearSearchBtn.classList.add('hidden');
+                }
+                actualizarTabla();
+            });
+            
+            // Limpiar búsqueda
+            clearSearchBtn.addEventListener('click', function() {
+                searchInput.value = '';
+                clearSearchBtn.classList.add('hidden');
+                actualizarTabla();
+                searchInput.focus();
+            });
+            
+            // Limpiar almacenamiento
+            clearStorageBtn.addEventListener('click', function() {
+                mostrarConfirmacion(
+                    '¿Está seguro de borrar todos los registros?',
+                    'Esta acción no se puede deshacer y eliminará todos los datos almacenados.',
+                    function() {
+                        registros = [];
+                        guardarRegistros();
+                        actualizarTabla();
+                        actualizarEstadisticas();
+                        mostrarAlerta('Todos los registros han sido eliminados.', 'success');
+                    }
+                );
+            });
+            
+            // Modal de código de barras
+            if (closeModal) {
+                closeModal.addEventListener('click', function() {
+                    barcodeModal.classList.add('hidden');
+                });
+            }
+            
+            // Cerrar modal al hacer clic fuera
+            if (barcodeModal) {
+                barcodeModal.addEventListener('click', function(e) {
+                    if (e.target === barcodeModal) {
+                        barcodeModal.classList.add('hidden');
+                    }
+                });
+            }
+            
+            if (printBarcode) {
+                printBarcode.addEventListener('click', function() {
+                    imprimirCodigoBarras();
+                });
+            }
+            
+            if (downloadBarcode) {
+                downloadBarcode.addEventListener('click', function() {
+                    descargarCodigoBarras();
+                });
+            }
+            
+            // Exportar a CSV
+            if (exportCsvBtn) {
+                exportCsvBtn.addEventListener('click', exportarCSV);
+            }
+            
+            // Imprimir reporte
+            if (printReportBtn) {
+                printReportBtn.addEventListener('click', function() {
+                    imprimirReporte();
+                });
+            }
+        }
+        
+        function mostrarRegistro(registro) {
+            console.log('Creando fila para registro:', registro);
+            
+            if (!registrosTable) {
+                console.error('registrosTable no está disponible');
+                return;
+            }
+            
+            const ahora = new Date().getTime();
+            const tiempoTranscurrido = ahora - registro.timestamp;
+            let estado = '';
+            let estadoClase = '';
+            let estadoBadge = '';
+            
+            if (tiempoTranscurrido >= LIMITE_TIEMPO) {
+                estado = 'Expirado';
+                estadoClase = 'status-expired';
+                estadoBadge = 'badge-expired';
+            } else if (tiempoTranscurrido >= WARNING_TIME) {
+                estado = 'Próximo a expirar';
+                estadoClase = 'status-warning';
+                estadoBadge = 'badge-warning';
+            } else {
+                estado = 'Activo';
+                estadoClase = 'status-active';
+                estadoBadge = 'badge-active';
+            }
+            
+            console.log('Estado del registro: ' + estado + ', Clase: ' + estadoClase);
+            
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            
+            row.innerHTML = '<td class="px-6 py-4 whitespace-nowrap">' +
+                '<span class="' + estadoBadge + ' badge">' +
+                '<span class="status-indicator ' + estadoClase + '"></span>' +
+                estado +
+                '</span>' +
+                '</td>' +
+                '<td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">' + registro.lote + '</td>' +
+                '<td class="px-6 py-4 whitespace-nowrap">' + registro.silo + '</td>' +
+                '<td class="px-6 py-4 whitespace-nowrap">' + registro.maquina + '</td>' +
+                '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">' + registro.fecha + '</td>' +
+                '<td class="px-6 py-4 whitespace-nowrap">' +
+                '<button class="view-barcode action-btn action-btn-view">' +
+                '<i class="fas fa-eye"></i> Ver' +
+                '</button>' +
+                '</td>' +
+                '<td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">' +
+                '<div class="flex justify-end gap-2">' +
+                '<button class="delete-btn action-btn action-btn-delete" title="Eliminar registro">' +
+                '<i class="fas fa-trash-alt"></i>' +
+                '</button>' +
+                '<button class="print-btn action-btn action-btn-print" title="Imprimir código">' +
+                '<i class="fas fa-print"></i>' +
+                '</button>' +
+                '</div>' +
+                '</td>';
+            
+            console.log('Agregando fila a la tabla:', row);
+            registrosTable.appendChild(row);
+            console.log('Fila agregada exitosamente');
+            
+            // Eventos para los botones de la fila
+            row.querySelector('.view-barcode').addEventListener('click', function() {
+                try {
+                    if (typeof JsBarcode !== 'undefined' && modalBarcode) {
+                        const codigo = registro.lote + '-' + registro.silo;
+                        
+                        // Generar código de barras con configuración mejorada
+                        JsBarcode(modalBarcode, codigo, {
+                            format: "CODE128",
+                            width: 2,
+                            height: 60,
+                            displayValue: false,
+                            fontSize: 14,
+                            margin: 15,
+                            background: "#ffffff",
+                            lineColor: "#000000"
+                        });
+                        
+                        // Actualizar texto y tiempo de generación
+                        document.getElementById('barcodeText').textContent = codigo;
+                        document.getElementById('generationTime').textContent = new Date().toLocaleTimeString('es-ES');
+                        
+                        // Mostrar modal
+                        barcodeModal.classList.remove('hidden');
+                    } else {
+                        console.error('JsBarcode no está disponible o modalBarcode no existe');
+                        mostrarAlerta('Error al generar el código de barras', 'error');
+                    }
+                } catch (error) {
+                    console.error("Error mostrando código de barras:", error);
+                    mostrarAlerta('Error al generar el código de barras', 'error');
+                }
+            });
+            
+            row.querySelector('.delete-btn').addEventListener('click', function() {
+                mostrarConfirmacion(
+                    '¿Eliminar este registro?',
+                    'Está a punto de eliminar el lote ' + registro.lote + ' del ' + registro.silo + '.',
+                    function() {
+                        registros = registros.filter(r => r.timestamp !== registro.timestamp);
+                        guardarRegistros();
+                        actualizarTabla();
+                        actualizarEstadisticas();
+                        mostrarAlerta('Registro eliminado correctamente.', 'success');
+                    }
+                );
+            });
+            
+            row.querySelector('.print-btn').addEventListener('click', function() {
+                imprimirCodigoIndividual(registro);
+            });
+        }
+        
+        function limpiarRegistrosExpirados() {
+            const ahora = new Date().getTime();
+            const registrosOriginales = registros.length;
+            registros = registros.filter(registro => {
+                const tiempoTranscurrido = ahora - registro.timestamp;
+                return tiempoTranscurrido < LIMITE_TIEMPO;
+            });
+            
+            if (registrosOriginales !== registros.length) {
+                guardarRegistros();
+                console.log('Limpiados ' + (registrosOriginales - registros.length) + ' registros expirados');
+            }
+        }
+        
+        function actualizarTabla() {
+            console.log('Actualizando tabla con ' + registros.length + ' registros');
+            console.log('Registros actuales:', registros);
+            
+            // Verificar que el elemento de la tabla existe
+            if (!registrosTable) {
+                console.error('Elemento registrosTable no encontrado');
+                return;
+            }
+            
+            registrosTable.innerHTML = '';
+            
+            if (registros.length === 0) {
+                console.log('No hay registros para mostrar');
+                registrosTable.innerHTML = '<tr>' +
+                    '<td colspan="7" class="px-6 py-8 text-center text-gray-500">' +
+                    '<i class="fas fa-database fa-2x mb-3 text-gray-300"></i>' +
+                    '<p class="font-medium">No hay registros disponibles</p>' +
+                    '<p class="text-sm mt-1">Agregue un nuevo registro usando el formulario</p>' +
+                    '</td>' +
+                    '</tr>';
+                
+                // Actualizar información de la tabla
+                const tableInfo = document.getElementById('table-info');
+                if (tableInfo) {
+                    tableInfo.textContent = 'Mostrando 0 registros';
+                }
+                return;
+            }
+            
+            // Ordenar registros por fecha (más recientes primero)
+            const registrosOrdenados = registros.slice().sort((a, b) => b.timestamp - a.timestamp);
+            console.log('Registros ordenados:', registrosOrdenados);
+            
+            // Filtrar por búsqueda
+            const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+            let registrosFiltrados = registrosOrdenados;
+            
+            if (searchTerm) {
+                registrosFiltrados = registrosOrdenados.filter(registro => {
+                    const registroText = (registro.lote + ' ' + registro.silo + ' ' + registro.maquina + ' ' + registro.fecha).toLowerCase();
+                    return registroText.includes(searchTerm);
+                });
+                console.log('Registros filtrados por búsqueda:', registrosFiltrados);
+            }
+            
+            if (registrosFiltrados.length === 0 && searchTerm) {
+                registrosTable.innerHTML = '<tr>' +
+                    '<td colspan="7" class="px-6 py-8 text-center text-gray-500">' +
+                    '<i class="fas fa-search fa-2x mb-3 text-gray-300"></i>' +
+                    '<p class="font-medium">No se encontraron registros</p>' +
+                    '<p class="text-sm mt-1">"' + searchInput.value + '"</p>' +
+                    '</td>' +
+                    '</tr>';
+            } else {
+                console.log('Mostrando ' + registrosFiltrados.length + ' registros');
+                registrosFiltrados.forEach((registro, index) => {
+                    console.log('Mostrando registro ' + (index + 1) + ':', registro);
+                    mostrarRegistro(registro);
+                });
+            }
+            
+            // Actualizar información de la tabla
+            const totalRegistros = registros.length;
+            const visibleCount = registrosFiltrados.length;
+            const tableInfo = document.getElementById('table-info');
+            if (tableInfo) {
+                tableInfo.textContent = searchTerm ? 
+                    'Mostrando ' + visibleCount + ' de ' + totalRegistros + ' registros' :
+                    'Mostrando ' + totalRegistros + ' registros';
+            }
+        }
+        
+        function actualizarEstadisticas() {
+            if (!activeCountEl || !silosInUseEl || !lastRecordEl) {
+                console.error('Elementos de estadísticas no encontrados');
+                return;
+            }
+            
+            // Contar registros activos
+            const ahora = new Date().getTime();
+            const activos = registros.filter(r => (ahora - r.timestamp) < LIMITE_TIEMPO).length;
+            activeCountEl.textContent = activos;
+            
+            // Contar silos en uso
+            const silosUnicos = new Set(registros.map(r => r.silo));
+            silosInUseEl.textContent = silosUnicos.size + '/5';
+            
+            // Último registro
+            if (registros.length > 0) {
+                const ultimo = registros.reduce((prev, current) =>
+                    (prev.timestamp > current.timestamp) ? prev : current
+                );
+                lastRecordEl.textContent = ultimo.lote + ' - ' + ultimo.fecha.split(',')[0];
+            } else {
+                lastRecordEl.textContent = 'N/A';
+            }
+        }
+        
+        function exportarCSV() {
+            if (registros.length === 0) {
+                mostrarAlerta('No hay datos para exportar.', 'warning');
+                return;
+            }
+            
+            try {
+                // Encabezados CSV
+                let csv = 'Lote,Silo,Máquina,Fecha Registro,Estado\n';
+                
+                // Agregar datos
+                const ahora = new Date().getTime();
+                registros.forEach(registro => {
+                    const tiempoTranscurrido = ahora - registro.timestamp;
+                    let estado = tiempoTranscurrido >= LIMITE_TIEMPO ? 'Expirado' :
+                                 tiempoTranscurrido >= WARNING_TIME ? 'Próximo a expirar' : 'Activo';
+                    
+                    csv += '"' + registro.lote + '","' + registro.silo + '","' + registro.maquina + '","' + registro.fecha + '","' + estado + '"\n';
+                });
+                
+                // Crear archivo CSV
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'registros_silos_' + new Date().toISOString().slice(0,10) + '.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                mostrarAlerta('Exportación a CSV completada.', 'success');
+            } catch (error) {
+                console.error('Error al exportar CSV:', error);
+                mostrarAlerta('Error al exportar los datos.', 'error');
+            }
+        }
+        
+        function descargarCodigoBarras() {
+            try {
+                const svgElement = modalBarcode;
+                const svgData = new XMLSerializer().serializeToString(svgElement);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    
+                    canvas.toBlob(function(blob) {
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = 'codigo_barras_' + document.getElementById('barcodeText').textContent + '.png';
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        mostrarAlerta('Código de barras descargado correctamente.', 'success');
+                    });
+                };
+                
+                img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+            } catch (error) {
+                console.error('Error al descargar código de barras:', error);
+                mostrarAlerta('Error al descargar el código de barras.', 'error');
+            }
+        }
+        
+        function imprimirReporte() {
+            const printWindow = window.open('', '_blank');
+            const ahora = new Date().toLocaleString('es-ES');
+            
+            let html = '<!DOCTYPE html>' +
+                '<html>' +
+                '<head>' +
+                '<title>Reporte de Registros - ' + new Date().toLocaleDateString('es-ES') + '</title>' +
+                '<style>' +
+                'body { font-family: Arial, sans-serif; margin: 20px; }' +
+                '.header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px; }' +
+                '.company { font-size: 24px; font-weight: bold; margin-bottom: 5px; }' +
+                '.report-title { font-size: 18px; color: #555; }' +
+                '.stats { display: flex; justify-content: space-around; margin: 20px 0 30px; }' +
+                '.stat { text-align: center; padding: 15px; border-radius: 8px; width: 30%; }' +
+                '.stat h3 { font-size: 24px; margin: 0 0 5px; }' +
+                '.stat p { color: #666; margin: 0; }' +
+                'table { width: 100%; border-collapse: collapse; margin-top: 20px; }' +
+                'th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }' +
+                'th { background-color: #f8f9fa; font-weight: bold; }' +
+                '.status-active { color: #065f46; }' +
+                '.status-warning { color: #92400e; }' +
+                '.status-expired { color: #991b1b; }' +
+                '.footer { margin-top: 30px; text-align: right; font-size: 12px; color: #666; }' +
+                '@media print { body { margin: 0; padding: 10px; } }' +
+                '</style>' +
+                '</head>' +
+                '<body>' +
+                '<div class="header">' +
+                '<div class="company">Gestión de Silos y Lotes</div>' +
+                '<div class="report-title">Reporte de Registros</div>' +
+                '<div style="margin-top: 10px; font-size: 14px; color: #666;">Generado el: ' + ahora + '</div>' +
+                '</div>' +
+                '<div class="stats">' +
+                '<div class="stat" style="background-color: #f0f9ff;">' +
+                '<h3>' + (activeCountEl ? activeCountEl.textContent : '0') + '</h3>' +
+                '<p>Registros Activos</p>' +
+                '</div>' +
+                '<div class="stat" style="background-color: #f0fdf4;">' +
+                '<h3>' + (silosInUseEl ? silosInUseEl.textContent : '0/5') + '</h3>' +
+                '<p>Silos en Uso</p>' +
+                '</div>' +
+                '<div class="stat" style="background-color: #f5f3ff;">' +
+                '<h3>' + registros.length + '</h3>' +
+                '<p>Total Registros</p>' +
+                '</div>' +
+                '</div>' +
+                '<table>' +
+                '<thead>' +
+                '<tr>' +
+                '<th>Estado</th>' +
+                '<th>Lote</th>' +
+                '<th>Silo</th>' +
+                '<th>Máquina</th>' +
+                '<th>Fecha/Hora</th>' +
+                '</tr>' +
+                '</thead>' +
+                '<tbody>';
+            
+            const ahora_timestamp = new Date().getTime();
+            registros.sort((a, b) => b.timestamp - a.timestamp).forEach(registro => {
+                const tiempoTranscurrido = ahora_timestamp - registro.timestamp;
+                let estado = '';
+                let estadoClase = '';
+                
+                if (tiempoTranscurrido >= LIMITE_TIEMPO) {
+                    estado = 'Expirado';
+                    estadoClase = 'status-expired';
+                } else if (tiempoTranscurrido >= WARNING_TIME) {
+                    estado = 'Próximo a expirar';
+                    estadoClase = 'status-warning';
+                } else {
+                    estado = 'Activo';
+                    estadoClase = 'status-active';
+                }
+                
+                html += '<tr>' +
+                    '<td class="' + estadoClase + '">' + estado + '</td>' +
+                    '<td>' + registro.lote + '</td>' +
+                    '<td>' + registro.silo + '</td>' +
+                    '<td>' + registro.maquina + '</td>' +
+                    '<td>' + registro.fecha + '</td>' +
+                    '</tr>';
+            });
+            
+            html += '</tbody>' +
+                '</table>' +
+                '<div class="footer">' +
+                'Sistema de Gestión de Silos y Lotes - v2.1.2' +
+                '</div>' +
+                '</body>' +
+                '</html>';
+            
+            printWindow.document.write(html);
+            printWindow.document.close();
+            setTimeout(() => {
+                printWindow.print();
+            }, 500);
+        }
+        
+        function imprimirCodigoBarras() {
+            const printWindow = window.open('', '_blank');
+            const svgElement = modalBarcode.cloneNode(true);
+            const codigo = document.getElementById('barcodeText').textContent;
+            
+            printWindow.document.write('<!DOCTYPE html>' +
+                '<html>' +
+                '<head>' +
+                '<title>Código de Barras - ' + codigo + '</title>' +
+                '<style>' +
+                'body { font-family: Arial, sans-serif; text-align: center; padding: 20px; margin: 0; }' +
+                '.barcode-container { margin: 20px auto; display: flex; justify-content: center; align-items: center; }' +
+                '.code-text { font-family: monospace; font-size: 16px; margin-top: 10px; letter-spacing: 1px; }' +
+                '@media print { body { margin: 0; padding: 10px; } @page { size: auto; margin: 5mm; } }' +
+                '</style>' +
+                '</head>' +
+                '<body>' +
+                '<h2 style="margin-bottom: 5px;">Código de Barras</h2>' +
+                '<p style="margin-bottom: 20px; color: #555; font-size: 14px;">' + new Date().toLocaleString('es-ES') + '</p>' +
+                '<div class="barcode-container">' +
+                svgElement.outerHTML +
+                '</div>' +
+                '<div class="code-text">' + codigo + '</div>' +
+                '<script>' +
+                'setTimeout(function() { window.print(); }, 300);' +
+                '<\/script>' +
+                '</body>' +
+                '</html>');
+            printWindow.document.close();
+        }
+        
+        function imprimirCodigoIndividual(registro) {
+            const printWindow = window.open('', '_blank');
+            const codigo = registro.lote + '-' + registro.silo;
+            
+            printWindow.document.write(
+                '<!DOCTYPE html>' +
+                '<html>' +
+                '<head>' +
+                '<title>Código de Barras - ' + registro.lote + '</title>' +
+                '<style>' +
+                'body { font-family: Arial, sans-serif; text-align: center; padding: 20px; margin: 0; }' +
+                '.barcode-container { margin: 20px auto; display: flex; justify-content: center; align-items: center; }' +
+                '.info { margin: 10px 0; font-size: 14px; color: #555; }' +
+                '.code-text { font-family: monospace; font-size: 16px; margin-top: 10px; letter-spacing: 1px; }' +
+                '@media print { body { margin: 0; padding: 10px; } @page { size: auto; margin: 5mm; } }' +
+                '</style>' +
+                '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>' +
+                '</head>' +
+                '<body>' +
+                '<h2 style="margin-bottom: 5px;">' + registro.lote + '</h2>' +
+                '<div class="info">Silo: ' + registro.silo + '</div>' +
+                '<div class="info">Máquina: ' + registro.maquina + '</div>' +
+                '<div class="info">Fecha: ' + registro.fecha + '</div>' +
+                '<div class="barcode-container">' +
+                '<svg id="printBarcode"></svg>' +
+                '</div>' +
+                '<div class="code-text">' + codigo + '</div>' +
+                '<script>' +
+                'try {' +
+                'JsBarcode("#printBarcode", "' + codigo + '", {' +
+                'format: "CODE128",' +
+                'width: 2,' +
+                'height: 50,' +
+                'displayValue: false,' +
+                'fontSize: 12,' +
+                'margin: 10' +
+                '});' +
+                'setTimeout(function() { window.print(); }, 500);' +
+                '} catch(e) {' +
+                'console.error("Error generando código:", e);' +
+                'alert("Error al generar código de barras");' +
+                '}' +
+                '<\/script>' +
+                '</body>' +
+                '</html>'
+            );
+            printWindow.document.close();
+        }
+        
+        function updateCurrentTime() {
+            if (currentTimeEl) {
+                const now = new Date();
+                currentTimeEl.textContent = now.toLocaleString('es-ES', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+        }
+        
+        function mostrarAlerta(mensaje, tipo) {
+            // Eliminar alertas existentes
+            const alertasExistentes = document.querySelectorAll('.custom-alert');
+            alertasExistentes.forEach(alerta => alerta.remove());
+            
+            // Crear nueva alerta
+            const alerta = document.createElement('div');
+            let bgColor = 'bg-blue-50 border-blue-400 text-blue-700';
+            let icon = 'fas fa-info-circle text-blue-500';
+            
+            if (tipo === 'error') {
+                bgColor = 'bg-red-50 border-red-400 text-red-700';
+                icon = 'fas fa-exclamation-circle text-red-500';
+            } else if (tipo === 'success') {
+                bgColor = 'bg-green-50 border-green-400 text-green-700';
+                icon = 'fas fa-check-circle text-green-500';
+            } else if (tipo === 'warning') {
+                bgColor = 'bg-yellow-50 border-yellow-400 text-yellow-700';
+                icon = 'fas fa-exclamation-triangle text-yellow-500';
+            }
+            
+            alerta.className = 'custom-alert fixed top-4 right-4 border-l-4 ' + bgColor + ' p-4 rounded shadow-lg z-50 max-w-sm flex items-start';
+            alerta.innerHTML = '<div class="mr-3 mt-1">' +
+                '<i class="' + icon + '"></i>' +
+                '</div>' +
+                '<div class="flex-1">' +
+                '<p class="font-medium">' + mensaje + '</p>' +
+                '</div>' +
+                '<button class="ml-4 close-alert text-gray-500 hover:text-gray-700">' +
+                '<i class="fas fa-times"></i>' +
+                '</button>';
+            
+            document.body.appendChild(alerta);
+            
+            // Cerrar alerta después de 5 segundos
+            const timeoutId = setTimeout(() => {
+                if (alerta.parentNode) {
+                    alerta.classList.add('fade-out');
+                    setTimeout(() => {
+                        if (alerta.parentNode) {
+                            alerta.remove();
+                        }
+                    }, 300);
+                }
+            }, 5000);
+            
+            // Cerrar manualmente
+            alerta.querySelector('.close-alert').addEventListener('click', () => {
+                clearTimeout(timeoutId);
+                alerta.classList.add('fade-out');
+                setTimeout(() => {
+                    if (alerta.parentNode) {
+                        alerta.remove();
+                    }
+                }, 300);
+            });
+        }
+        
+        function mostrarConfirmacion(titulo, mensaje, callback) {
+            // Eliminar confirmaciones existentes
+            const confirmacionesExistentes = document.querySelectorAll('.custom-confirm');
+            confirmacionesExistentes.forEach(confirm => confirm.remove());
+            
+            // Crear nueva confirmación
+            const confirmacion = document.createElement('div');
+            confirmacion.className = 'custom-confirm fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            confirmacion.innerHTML = '<div class="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">' +
+                '<div class="flex justify-between items-center mb-4">' +
+                '<h3 class="text-lg font-semibold flex items-center">' +
+                '<i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>' +
+                titulo +
+                '</h3>' +
+                '<button class="close-confirm text-gray-500 hover:text-gray-700 transition-colors">' +
+                '<i class="fas fa-times"></i>' +
+                '</button>' +
+                '</div>' +
+                '<p class="mb-6 text-gray-600">' + mensaje + '</p>' +
+                '<div class="flex justify-end space-x-3">' +
+                '<button class="cancel-confirm px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors">' +
+                'Cancelar' +
+                '</button>' +
+                '<button class="confirm-ok px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors">' +
+                'Confirmar' +
+                '</button>' +
+                '</div>' +
+                '</div>';
+            
+            document.body.appendChild(confirmacion);
+            
+            // Eventos de los botones
+            const closeConfirm = () => {
+                confirmacion.remove();
+            };
+            
+            confirmacion.querySelector('.close-confirm').addEventListener('click', closeConfirm);
+            confirmacion.querySelector('.cancel-confirm').addEventListener('click', closeConfirm);
+            
+            // Cerrar al hacer clic fuera del modal
+            confirmacion.addEventListener('click', (e) => {
+                if (e.target === confirmacion) {
+                    closeConfirm();
+                }
+            });
+            
+            confirmacion.querySelector('.confirm-ok').addEventListener('click', () => {
+                confirmacion.remove();
+                if (typeof callback === 'function') {
+                    callback();
+                }
+            });
+            
+            // Cerrar con Escape
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                       closeConfirm();
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+        }
+        
+    </script>
+</body>
+</html>
